@@ -14,7 +14,7 @@ function initScript(): void {
 
     const wmeSDK: WmeSDK = window.getWmeSdk(
         {
-            scriptId: "wme-speedlimit-shortcuts", // TODO: replace with your script id and script name
+            scriptId: "wme-speedlimits-shortcuts", // TODO: replace with your script id and script name
             scriptName: "WME SL Shortcuts"
         }
     )
