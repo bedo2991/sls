@@ -3,7 +3,7 @@ Sets shortcuts for quickly updating the speed limits. Use the numbers + the ALT 
 
 ## Installation Instructions
 - Install [Tampermonkey](https://www.tampermonkey.net/)
-- Install **Speed Limits Shortcuts** (SLS) from [here](https://code.waze.tools/repository/70101218-806f-4c8a-9323-49df8cd97534.user.js)ù
+- Install **Speed Limits Shortcuts** (SLS) from [here](https://code.waze.tools/repository/70101218-806f-4c8a-9323-49df8cd97534.user.js)
   
 
 ## Bugs and Feature Requests
