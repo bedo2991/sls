@@ -14,7 +14,7 @@ function initScript(): void {
 
     const wmeSDK: WmeSDK = window.getWmeSdk(
         {
-            scriptId: "wme-speedlimits-shortcuts", // TODO: replace with your script id and script name
+            scriptId: "wme-speedlimits-shortcuts",
             scriptName: "WME SL Shortcuts"
         }
     )
@@ -75,6 +75,10 @@ function initScript(): void {
      * @param speed the speed limit to set. If 0 or null, the speed limit will be removed.
      */
     function setSpeed(segId: number, speed: number | null): void {
+        if (speed && speed > 0 && wmeSDK.Settings.getUserSettings().isImperial) {
+            alert("Sorry, 'WME Speed Limits Shortcuts' does not support imperial units.");
+            return;
+        }
         const limitToSet = (speed != null && speed > 0) ? speed : null;
         wmeSDK.DataModel.Segments.updateSegment({
             fwdSpeedLimit: limitToSet, // 0 seems to also work to remove the SL, but the docs say null
