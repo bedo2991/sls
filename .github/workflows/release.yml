@@ -98,18 +98,14 @@ jobs:
             release.user.js
             update.user.js
           body: |
-            ## Pre-release ${{ steps.tag.outputs.tag }}
-            
-            This is an automated pre-release created from tag `${{ steps.tag.outputs.tag }}`.
+            ## Release ${{ steps.tag.outputs.tag }}
             
             ### Download
-            - [release.user.js](https://github.com/${{ github.repository }}/releases/latest/download/release.user.js) - Main userscript file
-            - [update.user.js](https://github.com/${{ github.repository }}/releases/latest/download/update.user.js) - Update checker (for Tampermonkey)
+            - [release.user.js](https://github.com/${{ github.repository }}/releases/latest/download/release.user.js)
             
             ### Installation
-            1. Install a userscript manager (like Tampermonkey)
+            1. Install a userscript manager (like [Tampermonkey](https://www.tampermonkey.net/))
             2. Click the main userscript download link above
             3. Your userscript manager should prompt you to install the script
-            4. The script will automatically check for updates using the update.user.js file
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
