@@ -1,5 +1,5 @@
 {
-  "version": "1.2.1",
+  "version": "1.2.2",
   "name": "wme-speedlimit-shortcuts",
   "devDependencies": {
     "@rollup/plugin-typescript": "^12.1.0",
