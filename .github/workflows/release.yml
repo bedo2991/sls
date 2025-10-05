@@ -1,0 +1,103 @@
+name: Create Pre-release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.2.3
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update package.json version
+        run: |
+          # Update package.json with the tag version
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+
+      - name: Update header.js version
+        run: |
+          # Update version in header.js
+          sed -i 's/\/\/ @version.*$/\/\/ @version     ${{ steps.version.outputs.version }}/' header.js
+
+      - name: Build userscript  
+        run: |
+          # Build the userscript
+          npm run compile
+          # Create the release file manually for Linux compatibility
+          mkdir -p releases
+          cat header.js .out/main.user.js > releases/release-${{ steps.version.outputs.version }}.user.js
+          # Create the update file (header only) for version checking
+          cp header.js releases/update-${{ steps.version.outputs.version }}.user.js
+
+      - name: Get tag name
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Copy built files with stable names
+        run: |
+          # Copy the built release file with stable name
+          BUILT_RELEASE="releases/release-${{ steps.version.outputs.version }}.user.js"
+          BUILT_UPDATE="releases/update-${{ steps.version.outputs.version }}.user.js"
+          
+          if [ -f "$BUILT_RELEASE" ]; then
+            cp "$BUILT_RELEASE" release.user.js
+            echo "Created release.user.js from $BUILT_RELEASE"
+          else
+            echo "Error: Built release file not found: $BUILT_RELEASE"
+            ls -la releases/
+            exit 1
+          fi
+          
+          if [ -f "$BUILT_UPDATE" ]; then
+            cp "$BUILT_UPDATE" update.user.js
+            echo "Created update.user.js from $BUILT_UPDATE"
+          else
+            echo "Error: Built update file not found: $BUILT_UPDATE"
+            ls -la releases/
+            exit 1
+          fi
+
+      - name: Create Pre-release
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          name: "Pre-release ${{ steps.tag.outputs.tag }}"
+          tag_name: ${{ steps.tag.outputs.tag }}
+          files: |
+            release.user.js
+            update.user.js
+          body: |
+            ## Pre-release ${{ steps.tag.outputs.tag }}
+            
+            This is an automated pre-release created from tag `${{ steps.tag.outputs.tag }}`.
+            
+            ### Download
+            - [release.user.js](https://github.com/${{ github.repository }}/releases/latest/download/release.user.js) - Main userscript file
+            - [update.user.js](https://github.com/${{ github.repository }}/releases/latest/download/update.user.js) - Update checker (for Tampermonkey)
+            
+            ### Installation
+            1. Install a userscript manager (like Tampermonkey)
+            2. Click the main userscript download link above
+            3. Your userscript manager should prompt you to install the script
+            4. The script will automatically check for updates using the update.user.js file
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
