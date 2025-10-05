@@ -30,8 +30,15 @@ jobs:
 
       - name: Update package.json version
         run: |
-          # Update package.json with the tag version
-          npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+          # Update package.json with the tag version (only if different)
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          TARGET_VERSION="${{ steps.version.outputs.version }}"
+          if [ "$CURRENT_VERSION" != "$TARGET_VERSION" ]; then
+            npm version $TARGET_VERSION --no-git-tag-version
+            echo "Updated version from $CURRENT_VERSION to $TARGET_VERSION"
+          else
+            echo "Version already matches target: $TARGET_VERSION"
+          fi
 
       - name: Update header.js version
         run: |
