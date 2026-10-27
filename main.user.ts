@@ -521,6 +521,7 @@ async function initScript(): Promise<void> {
                         }, 5000);
                         return;
                     };
+                    if (!(await wmeSDK.DataModel.Segments.hasPermissions({ permission: "EDIT_PROPERTIES", segmentId: segm.id }))) continue;
                     if (!(await wmeSDK.DataModel.Segments.isRoadTypeDrivable({ roadType: segm.roadType }))) continue;
                     if (segm.isAtoB || segm.isBtoA) {
                         if (segm.isAtoB && (segm.fwdSpeedLimit || segm.revSpeedLimit)) {
