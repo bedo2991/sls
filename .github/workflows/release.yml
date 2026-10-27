@@ -45,18 +45,10 @@ jobs:
             echo "Version already matches target: $TARGET_VERSION"
           fi
 
-      - name: Update header.js version
+      - name: Build userscript
         run: |
-          # Update version in header.js
-          sed -i 's/\/\/ @version.*$/\/\/ @version     ${{ steps.version.outputs.version }}/' header.js
-
-      - name: Build userscript  
-        run: |
-          # Build the userscript
-          npm run compile
-          # Create the release file manually for Linux compatibility
-          mkdir -p releases
-          cat header.js .out/main.user.js > releases/release-${{ steps.version.outputs.version }}.user.js
+          # Build the production release (updates header.js version, strips debug logs, minifies, and concatenates)
+          npm run release
           # Create the update file (header only) for version checking
           cp header.js releases/update-${{ steps.version.outputs.version }}.user.js
 
