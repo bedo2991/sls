@@ -350,8 +350,11 @@ async function initScript(): Promise<void> {
                 setReverseFixEnabled(isReverseFixEnabled);
                 if (isReverseFixEnabled) {
                     fixAllSegments();
-                } else if (fixAllSegmentsController) {
-                    fixAllSegmentsController.abort();
+                } else {
+                    if (fixAllSegmentsController) {
+                        fixAllSegmentsController.abort();
+                    }
+                    document.getElementById("wme-sls-progress-container")?.remove();
                 }
             });
         }
@@ -396,23 +399,33 @@ async function initScript(): Promise<void> {
     async function fixAllSegments(): Promise<void> {
         if (!isReverseFixEnabled) return;
 
-        // Abort any existing execution
+        // Abort any existing execution and remove any stale progress indicator
         if (fixAllSegmentsController) {
             fixAllSegmentsController.abort();
         }
+        document.getElementById("wme-sls-progress-container")?.remove();
 
         // Create new controller for this execution
-        fixAllSegmentsController = new AbortController();
-        const signal = fixAllSegmentsController.signal;
+        const controller = new AbortController();
+        fixAllSegmentsController = controller;
+        const signal = controller.signal;
+
+        let progressContainer: HTMLDivElement | null = null;
+        let retainProgressContainer = false;
 
         try {
             if (!(await wmeSDK.Editing.isEditingAllowed()) || (await wmeSDK.Editing.isSnapshotModeOn())) return;
-
-            const allSegments = await wmeSDK.DataModel.Segments.getAll();
             if (signal.aborted || !isReverseFixEnabled) return;
 
+            const allSegments = await wmeSDK.DataModel.Segments.getAll();
+            if (signal.aborted || !isReverseFixEnabled || allSegments.length === 0) return;
+
+            // Remove any stale progress indicator left in the DOM
+            document.getElementById("wme-sls-progress-container")?.remove();
+
             // Create progress indicator
-            const progressContainer = document.createElement('div');
+            progressContainer = document.createElement('div');
+            progressContainer.id = "wme-sls-progress-container";
             progressContainer.style.cssText = `
                 position: fixed;
                 bottom: 25px;
@@ -447,43 +460,38 @@ async function initScript(): Promise<void> {
             progressContainer.appendChild(progressCircle);
             document.body.appendChild(progressContainer);
 
+            const currentProgressContainer = progressContainer;
             signal.addEventListener("abort", () => {
-                if (document.body.contains(progressContainer)) {
-                    document.body.removeChild(progressContainer);
-                }
+                currentProgressContainer.remove();
             }, { once: true });
 
-            const time = new Date().toISOString();
-            //console.error("START " + time);
-
             for (let i = 0; i < allSegments.length; i += batchSize) {
-                // Check if aborted
-                if (signal.aborted || !isReverseFixEnabled) {
-                    if (document.body.contains(progressContainer)) {
-                        document.body.removeChild(progressContainer);
-                    }
+                // Check if aborted or editing is no longer allowed
+                if (
+                    signal.aborted ||
+                    !isReverseFixEnabled ||
+                    !(await wmeSDK.Editing.isEditingAllowed()) ||
+                    (await wmeSDK.Editing.isSnapshotModeOn())
+                ) {
                     return;
                 }
 
                 const batch = allSegments.slice(i, i + batchSize);
                 for (const segm of batch) {
                     if (signal.aborted || !isReverseFixEnabled) {
-                        if (document.body.contains(progressContainer)) {
-                            document.body.removeChild(progressContainer);
-                        }
                         return;
                     }
                     if ((await wmeSDK.Editing.getUnsavedChangesCount()) >= maxEdits) {
                         console.debug(`Reached max edits limit of ${maxEdits}. Stopping.`);
 
                         // Replace progress indicator with red X
-                        progressContainer.innerHTML = '';
-                        progressContainer.style.background = 'rgba(244, 67, 54, 0.9)';
+                        currentProgressContainer.innerHTML = '';
+                        currentProgressContainer.style.background = 'rgba(244, 67, 54, 0.9)';
 
                         const xIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 
                         // Add tooltip
-                        progressContainer.title = 'Maximum edits reached';
+                        currentProgressContainer.title = 'Maximum edits reached';
 
                         // Add small label
                         const label = document.createElement('div');
@@ -510,26 +518,34 @@ async function initScript(): Promise<void> {
                         xPath.setAttribute('d', 'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z');
 
                         xIcon.appendChild(xPath);
-                        progressContainer.appendChild(xIcon);
-                        progressContainer.appendChild(label);
+                        currentProgressContainer.appendChild(xIcon);
+                        currentProgressContainer.appendChild(label);
 
-                        // Remove indicator after 3 seconds
+                        retainProgressContainer = true;
                         setTimeout(() => {
-                            if (document.body.contains(progressContainer)) {
-                                document.body.removeChild(progressContainer);
-                            }
+                            currentProgressContainer.remove();
                         }, 5000);
                         return;
-                    };
-                    if (!(await wmeSDK.DataModel.Segments.hasPermissions({ permission: "EDIT_PROPERTIES", segmentId: segm.id }))) continue;
-                    if (!(await wmeSDK.DataModel.Segments.isRoadTypeDrivable({ roadType: segm.roadType }))) continue;
-                    if (segm.isAtoB || segm.isBtoA) {
-                        if (segm.isAtoB && (segm.fwdSpeedLimit || segm.revSpeedLimit)) {
-                            await setSpeed(segm, segm.fwdSpeedLimit);
-                        } else if (segm.revSpeedLimit || segm.fwdSpeedLimit) {
-                            await setSpeed(segm, segm.revSpeedLimit);
-                        }
                     }
+
+                    try {
+                        if (!(await wmeSDK.DataModel.Segments.hasPermissions({ permission: "EDIT_PROPERTIES", segmentId: segm.id }))) continue;
+                        if (!(await wmeSDK.DataModel.Segments.isRoadTypeDrivable({ roadType: segm.roadType }))) continue;
+                        if (segm.isAtoB || segm.isBtoA) {
+                            if (segm.isAtoB && (segm.fwdSpeedLimit || segm.revSpeedLimit)) {
+                                await setSpeed(segm, segm.fwdSpeedLimit);
+                            } else if (segm.revSpeedLimit || segm.fwdSpeedLimit) {
+                                await setSpeed(segm, segm.revSpeedLimit);
+                            }
+                        }
+                    } catch (segError) {
+                        // Segment may have been unloaded from the data model while panning/zooming
+                        console.debug(`Skipping segment ${segm.id}:`, segError);
+                    }
+                }
+
+                if (signal.aborted || !isReverseFixEnabled) {
+                    return;
                 }
 
                 // Update progress
@@ -540,22 +556,12 @@ async function initScript(): Promise<void> {
                 // Yield control back to the browser after each batch
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
-
-            // Remove progress indicator
-            if (document.body.contains(progressContainer)) {
-                document.body.removeChild(progressContainer);
-            }
-            //console.error("END " + time);
-        } catch (error) {
-            // Clean up if error occurs
-            if (document.body.contains(document.querySelector('div[style*="position: fixed"]'))) {
-                const container = document.querySelector('div[style*="position: fixed"]') as HTMLElement;
-                if (container) document.body.removeChild(container);
-            }
-            throw error;
         } finally {
-            // Clear the controller when done
-            if (fixAllSegmentsController && !fixAllSegmentsController.signal.aborted) {
+            if (progressContainer && !retainProgressContainer) {
+                progressContainer.remove();
+            }
+            // Clear the controller only if it still belongs to this execution
+            if (fixAllSegmentsController === controller) {
                 fixAllSegmentsController = null;
             }
         }
